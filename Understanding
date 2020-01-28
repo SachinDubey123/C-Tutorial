@@ -1,0 +1,341 @@
+Business.Data.Entities
+
+public partial class DealerHoliday
+    {
+        public DealerHoliday()
+        {
+            this.DealerHolidayDescriptions = new List<DealerHolidayDescription>();
+        }
+
+        public short Id { get; set; }
+        public short DealerID { get; set; }
+        public System.DateTime StartDate { get; set; }
+        public System.DateTime EndDate { get; set; }
+        public Nullable<int> CreatedBy { get; set; }
+        public Nullable<System.DateTime> CreatedDate { get; set; }
+        public Nullable<int> UpdatedBy { get; set; }
+        public Nullable<System.DateTime> UpdatedDate { get; set; }
+        public Nullable<short> HolidayId { get; set; }
+        public virtual Dealer Dealer { get; set; }
+        public virtual Holiday Holiday { get; set; }
+        public virtual ICollection<DealerHolidayDescription> DealerHolidayDescriptions { get; set; }
+    }
+
+
+  public class DealerHolidayMap : EntityTypeConfiguration<DealerHoliday>
+    {
+        public DealerHolidayMap()
+        {
+            // Primary Key
+            this.HasKey(t => t.Id);
+
+            // Properties
+            // Table & Column Mappings
+            this.ToTable("DealerHoliday");
+            this.Property(t => t.Id).HasColumnName("Id");
+            this.Property(t => t.DealerID).HasColumnName("DealerID");
+            this.Property(t => t.StartDate).HasColumnName("StartDate");
+            this.Property(t => t.EndDate).HasColumnName("EndDate");
+            this.Property(t => t.CreatedBy).HasColumnName("CreatedBy");
+            this.Property(t => t.CreatedDate).HasColumnName("CreatedDate");
+            this.Property(t => t.UpdatedBy).HasColumnName("UpdatedBy");
+            this.Property(t => t.UpdatedDate).HasColumnName("UpdatedDate");
+            this.Property(t => t.HolidayId).HasColumnName("HolidayId");
+
+            // Relationships
+            this.HasRequired(t => t.Dealer)
+                .WithMany(t => t.DealerHolidays)
+                .HasForeignKey(d => d.DealerID);
+            this.HasOptional(t => t.Holiday)
+                .WithMany(t => t.DealerHolidays)
+                .HasForeignKey(d => d.HolidayId);
+
+        }
+    }
+
+
+  public partial class BOSContext : DbContext
+    {}
+
+
+Add mapping class in OnModelCreating Function in the BOSContext.cs file.
+
+
+Data
+
+Add Interface .cs file of the table in Respective Data Project. Under Interfaces folder. Project Name like BOS.OLP.Administration.Data
+
+  public class ModelRepository : IModelRepository
+    {
+        /// <summary>
+        /// The _uow
+        /// </summary>
+        private readonly IUow _uow;
+
+        /// <summary>
+        /// Initializes a new instance of the <see cref="ModelRepository"/> class.
+        /// </summary>
+        /// <param name="uow">The uow.</param>
+        public ModelRepository(IUow uow)
+        {
+            _uow = uow;
+        }
+
+
+
+  public interface IModelRepository
+    {
+        /// <summary>
+        /// Adds the related entity.
+        /// </summary>
+        /// <param name="item">The item.</param>
+        /// <param name="updatedSet">The updated set.</param>
+        void AddRelatedEntity(Model item, IEnumerable<object> updatedSet);
+
+        /// <summary>
+        /// Updates the related entity.
+        /// </summary>
+        /// <param name="item">The item.</param>
+        /// <param name="updatedSet">The updated set.</param>
+        void UpdateRelatedEntity(Model items, IEnumerable<object> updatedSet);
+
+
+
+
+    7. Resolve Repository Dependency
+        a. Add Data Repository Interface and Data Repository Class mapping in Business Unity
+
+
+
+   public class ModelManger : IModelManger
+    {
+        #region Variables
+
+        /// <summary>
+        /// The data context
+        /// </summary>
+        /// <value>The model repository.</value>
+        private IModelRepository ModelRepository { get; }
+
+        /// <summary>
+        /// Gets the model series repository.
+        /// </summary>
+        /// <value>
+        /// The model series repository.
+        /// </value>
+        private IModelSeriesRepository ModelSeriesRepository { get; }
+
+        /// <summary>
+        /// Gets or sets the brand repository.
+        /// </summary>
+        /// <value>The brand repository.</value>
+        private IBrandRepository BrandRepository { get; }
+
+        /// <summary>
+        /// Gets or sets the brand manager.
+        /// </summary>
+        /// <value>The brand manager.</value>
+        private IBrandManager BrandManager { get; }
+
+        /// <summary>
+        /// Gets or sets the common manager.
+        /// </summary>
+        /// <value>
+        /// The common manager.
+        /// </value>
+        private ICommonManager CommonManager { get; }
+
+        #endregion
+
+        #region Constructor
+
+        /// <summary>
+        /// Initializes a new instance of the <see cref="ModelManger" /> class.
+        /// </summary>
+        /// <param name="modelRepository">The model repository.</param>
+        /// <param name="brandRepository">The brand repository.</param>
+        /// <param name="brandManager">The brand manager.</param>
+        /// <param name="modelSeriesRepository">The model series repository.</param>
+        /// <param name="commonManager">The common manager.</param>
+        public ModelManger(IModelRepository modelRepository, IBrandRepository brandRepository,
+            IBrandManager brandManager, IModelSeriesRepository modelSeriesRepository, ICommonManager commonManager)
+        {
+            ModelRepository = modelRepository;
+            BrandManager = brandManager;
+            BrandRepository = brandRepository;
+            ModelSeriesRepository = modelSeriesRepository;
+            CommonManager = commonManager;
+        }
+
+        #endregion
+
+        #region Methods
+
+        /// <summary>
+        /// Gets the models.
+        /// </summary>
+        /// <param name="gridParameter">The grid parameter.</param>
+        /// <param name="groupRole">The group role.</param>
+        /// <returns></returns>
+        public IList<ModelListViewModel> GetModels(GridParameter gridParameter, string groupRole)
+        {
+            IList<ModelListViewModel> modelListViewModel = new List<ModelListViewModel>();
+            if (gridParameter == null)
+            {
+                return modelListViewModel;
+            }
+            var models = ModelRepository.GetAll(x => x.ModelDescriptions, x => x.ModelSery, x => x.ModelSery.Brand);
+            models = models.Where(x => x.ModelDescriptions.Any(z => z.Language == gridParameter.CurrentLanguage));
+
+            var adminRole = Enumerator.GroupRoleType.Admin.ToString();
+            models = (from model in models where (groupRole == adminRole || model.IsActive) select model);
+
+            var modellist = models.Project().To<ModelListViewModel>().AsQueryable();
+            modellist = GlobalSearch(gridParameter, modellist);
+
+            gridParameter.SortedColumn = gridParameter.SortedColumn == Constant.ModelSeries ? Constant.Brand : gridParameter.SortedColumn;
+            modelListViewModel = CommonManager.ToTableData(modellist, gridParameter);
+
+            return modelListViewModel;
+        }
+
+
+
+
+
+  public interface IModelManger
+    {
+        /// <summary>
+        /// Gets the models.
+        /// </summary>
+        /// <param name="gridParameter">The grid parameter.</param>
+        /// <param name="groupRole">The group role.</param>
+        /// <returns></returns>
+        IList<ModelListViewModel> GetModels(GridParameter gridParameter, string groupRole);
+
+        /// <summary>
+        /// Saves the specified model model.
+        /// </summary>
+        /// <param name="modelModel">The model model.</param>
+        void Save(ModelViewModel modelModel);
+
+
+
+
+
+
+Businee
+
+BusinessEntities
+Add view model of the entity in Business entity project.
+   public class ModelViewModel
+    {
+        /// <summary>
+        /// Gets or sets the unique identifier.
+        /// </summary>
+        /// <value>
+        /// The unique identifier.
+        /// </value>
+        public int Id { get; set; }
+
+        /// <summary>
+        /// Gets or sets the model series unique identifier.
+        /// </summary>
+        /// <value>
+        /// The model series unique identifier.
+        /// </value>
+        public short ModelSeriesId { get; set; }
+
+        /// <summary>
+        /// Gets or sets the brand unique identifier.
+        /// </summary>
+        /// <value>
+        /// The brand unique identifier.
+        /// </value>
+        public short BrandId { get; set; }
+
+        /// <summary>
+        /// Gets or sets a value indicating whether [is active].
+        /// </summary>
+        /// <value>
+        ///   <c>true</c> if [is active]; otherwise, <c>false</c>.
+        /// </value>
+        public bool IsActive { get; set; }
+
+        /// <summary>
+        /// Gets or sets the User Id.
+        /// </summary>
+        /// <value>
+        /// The User Id.
+        /// </value>
+        public int UserId { get; set; }
+
+        /// <summary>
+        /// Gets or sets the model description.
+        /// </summary>
+        /// <value>
+        /// The model description.
+        /// </value>
+        public IList<ModelDescriptionViewModel> ModelDescription { get; set; }
+
+        /// <summary>
+        /// Gets or sets the brands list.
+        /// </summary>
+        /// <value>
+        /// The brands list.
+        ///   </value>
+
+
+    /// </summary>
+    public class ModelDescriptionViewModel
+    {       
+        /// <summary>
+        /// Gets or sets the unique identifier.
+        /// </summary>
+        /// <value>
+        /// The unique identifier.
+        /// </value>
+        public int Id { get; set; }
+
+        /// <summary>
+        /// Gets or sets the model unique identifier.
+        /// </summary>
+        /// <value>
+        /// The model unique identifier.
+        /// </value>
+        public short ModelId { get; set; }
+
+        /// <summary>
+        /// Gets or sets the language.
+        /// </summary>
+        /// <value>
+        /// The language.
+        /// </value>
+        public string Language { get; set; }
+
+
+
+
+
+
+Set Auto Mapper of the entities 
+
+    10. Set Auto Mapper of the entities 
+        a. We set auto mapper between business entities view model and data model in mapping class. For Example – CampaignAutoMapperConfig.cs
+
+
+
+
+Resolve Manager Dependency
+
+        a. Add Business Manager Interface and Business Manager Class mapping in Unity helper class. For Example - AdministrationUnityHelper.cs in Base
+        b. Each module has web project. Please add the mapping in related web module project.
+Common 
+AdministrationUnityHelper.cs
+  Container.RegisterType<IModelManger, ModelManger>();
+
+
+
+Add Controller in web project
+
+
